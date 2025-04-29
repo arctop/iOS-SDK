@@ -143,7 +143,8 @@ The plural version returns a more comprehensive data structure reflecting the pr
 
     public struct ArctopPredictionData : Codable{
         public let PredictionId:String
-        public let PredictionName:String
+        public let PredictionName:String // code friendly name
+        public let PredictionTitle:String // user friendly title
         public let CalibrationStatus:UserCalibrationStatus
         public let iconKey:String // URL to an image file that is used in the Arctop app to signifiy the prediction
     }
