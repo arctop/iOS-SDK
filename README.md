@@ -46,22 +46,33 @@ The SDK contains the following components:
 
 > The SDK is designed to work with the async / await model for asynchronous operations.
 
-* [Setup Phase](#setup-phase)
-  * [Prerequisites](#prerequisites)
-  * [Initialize the SDK with Your API Key](#initialize-the-sdk-with-your-api-key)
-  * [Authorized Predictions](#authorized-predictions)
-  * [Register for Callbacks](#register-for-callbacks)
-* [Session Phase](#session-phase)
-  * [Verify That a User is Logged In](#verify-that-a-user-is-logged-in)
-  * [Verify That a User is Calibrated for Arctop](#verify-that-a-user-is-calibrated-for-arctop)
-  * [Connect to an Arctop Sensor Device](#connect-to-an-arctop-sensor-device)
-  * [Verify Signal Quality of Device](#verify-signal-quality-of-device)
-  * [Begin a Session](#begin-a-session)
-  * [Work with Session Data](#work-with-session-data)
-  * [Finish Session](#finish-session)
-* [Cleanup Phase](#cleanup-phase)
-  * [Shut Down the SDK](#shut-down-the-sdk)
-* [Example App](#example-app) 
+<!-- TOC -->
+* [Arctop® iOS Software Development Kit (SDK)](#arctop-ios-software-development-kit-sdk)
+* [Background](#background)
+* [Installation](#installation)
+* [Package Structure](#package-structure)
+* [Workflow](#workflow)
+* [Phase Instructions](#phase-instructions)
+    * [Setup Phase](#setup-phase)
+      * [Prerequisites](#prerequisites)
+          * [Mobile App](#mobile-app)
+          * [API Key](#api-key)
+      * [Initialize the SDK with Your API Key](#initialize-the-sdk-with-your-api-key)
+      * [Authorized Predictions](#authorized-predictions)
+      * [Register for Callbacks](#register-for-callbacks)
+    * [Session Phase](#session-phase)
+      * [Verify That a User is Logged In](#verify-that-a-user-is-logged-in-)
+      * [Verify That a User is Calibrated for Arctop](#verify-that-a-user-is-calibrated-for-arctop-)
+      * [Handling data permissions](#handling-data-permissions)
+      * [Connect to an Arctop Sensor Device](#connect-to-an-arctop-sensor-device-)
+      * [Verify Signal Quality of Device](#verify-signal-quality-of-device)
+      * [Begin a Session](#begin-a-session)
+      * [Work with Session Data](#work-with-session-data)
+      * [Finish Session](#finish-session)
+    * [Cleanup](#cleanup)
+      * [Shut Down the SDK](#shut-down-the-sdk)
+    * [Example App](#example-app)
+<!-- TOC -->
 
 # Phase Instructions
 
@@ -72,7 +83,7 @@ The SDK contains the following components:
 ###### Mobile App
 To use the Arctop SDK, you'll need to install the Arctop  app on your mobile device. The Arctop app is available on both the [App Store (iOS)](https://apps.apple.com/us/app/arctop/id6446177823?platform=iphone) and [Google Play (Android)](https://play.google.com/store/search?q=arctop&c=apps&hl=en_US) and can be found by searching "Arctop".
 
-After downloading the mobile app, use the Sign Up screen to create an account. Bluetooth permissions are required in order to connect to the EEG headwear device for Arctop calibrations and sessions. Push notification permissions are recommended to ensure users are informed of headwear and session status while using the Arctop app in the background.  
+After downloading the mobile app, use the Sign-Up screen to create an account. Bluetooth permissions are required in order to connect to the EEG headwear device for Arctop calibrations and sessions. Push notification permissions are recommended to ensure users are informed of headwear and session status while using the Arctop app in the background.  
 
 ###### API Key
 You will also need to create an API key in order to use the Arctop SDK with your app. To do so, please log into the online [Developer Portal](https://developer.arctop.com/sign-in) with the same credentials that you used to sign up for your in-app Arctop account. Once in the portal, navigate to the My Keys tab. Using the "Create New API Key" button, enter the details you'd like your API key to have and press "Create". This key will automatically be enabled for use, and can be disabled whenever you need. Feel free to contact us at support@arctop.com with any questions you may have regarding your API keys.
@@ -84,16 +95,16 @@ Once you have your API key and are ready to start working with the SDK, you will
 
 #### Authorized Predictions
 
-Each API key is provided a set of authorized predictions. This is defined by the system and the user's permissions model.
+Each API key is provided a set of authorized predictions at creation. 
 The SDK provides an accessor:
 
     var clientAllowedPredictions:[String] { get }
 
-This lists your app's authorized predictions' IDs.
+This lists your app's authorized predictions' IDs. Each prediction metric authorized still has to be calibrated by the user and your app will require the user's permission for the data stream.  
 
 #### Register for Callbacks
 
-While most functions in the SDK are aysnc, some callbacks are reported during normal operations.
+While most functions in the SDK are async, some callbacks are reported during normal operations.
 
 Call any of the *func registerListener(listener)* overloads to receive callbacks for different events.
 
@@ -113,7 +124,11 @@ In case the user isn't, launch the login page by calling:
 This will launch a login page inside an embedded sheet, utilizing AWS Cognito web sign in.
 Once complete, if the user has successfully signed in, you can continue your app's flow.
 
-#### Verify That a User is Calibrated for Arctop
+Another option for login is to have the user input a one time password from the Arctop app. Use this function variance to access that functionality.
+
+    func loginUser(otp:String) async -> Result<Void, Error>
+
+#### Verify That a User is Calibrated for Arctop 
 
 Before Arctop SDKs can be used in any sessions, a user must be calibrated on a per-prediction basis and have personal Arctop models generated for them. 
 Each cognitive metric has its own gamified calibration that takes approximately 4 minutes to complete within the Arctop app and only needs to be completed once per user. The focus metric is an exception, as it does not have its own calibration, but is instead unlocked automatically when both the visual attention and auditory attention calibrations have been completed. Each calibration process is important for Arctop’s software to learn individual users' unique patterns and tune its algorithms to be as accurate and robust as possible.
@@ -122,47 +137,81 @@ Note: At this time, only the Arctop mobile app for iOS has individual calibratio
 
 Your app only has access to the [Authorized Predictions](#authorized-predictions) as mentioned above.
 
-To verify that a user is calibrated, call the SDK to check the status using either of the methods:
-    
-    func checkUserCalibrationStatus(predictionId:String) -> UserCalibrationStatus
-    func checkUserCalibrationsStatus(predictionsIds:[String]) -> [ArctopPredictionData]
+Once a user has successfully logged in, the SDK provides an accessor
 
-The singular versions will only report the status for the requested ID.
+    var userPredictionsData:[ArctopPredictionData] { get }
 
-The UserCalibrationStatus enum is defined as:
+The *ArctopPredictionData* type is described below. Along with general data regarding the prediction itself, this type holds the data regarding the user's calibration status, and the permissions the user has given your app to access that data stream.
+
+    public struct ArctopPredictionData : Codable{
+        public let predictionId:String
+        public let predictionName:String // code friendly name
+        public let predictionTitle:String // user friendly title
+        public let calibrationStatus:UserCalibrationStatus
+        public let iconKey:String // URL to an image file that is used in the Arctop app to signifiy the prediction
+        public let predictionPermissionStatus:Bool // does your app have the user's permission to access this prediction data 
+    }
+
+
+The _UserCalibrationStatus_ enum is defined as:
 
     public enum UserCalibrationStatus: Int{
         case unknown = -100,
              blocked = -1,
              needsCalibration = 0,
              calibrationDone = 1,
-             modelsAvailable = 2
+             modelsAvailable = 2,
+             lockedByOthers = 11
     }
-
-The plural version returns a more comprehensive data structure reflecting the prediction as a whole:
-
-    public struct ArctopPredictionData : Codable{
-        public let PredictionId:String
-        public let PredictionName:String // code friendly name
-        public let PredictionTitle:String // user friendly title
-        public let CalibrationStatus:UserCalibrationStatus
-        public let iconKey:String // URL to an image file that is used in the Arctop app to signifiy the prediction
-    }
-
 
 A _calibrationDone_ state means the user has finished calibration and Arctop's servers are processing their models.
 This usually takes a few minutes and then the user is ready to proceed with live-streaming of the associated prediction.
 You cannot start a session with a prediction that is not in _modelsAvailable_ status.
 
+#### Handling data permissions
+
+Once a user has calibrated for a prediction, they will still need to grant your app permission to access that real-time data. Your permissions status is part of the _ArctopPredictionData_ described above.
+A user can change their per-app permissions at any time via the Arctop app, and the SDK will check that you have the correct permissions before allowing a session to begin.
+You can request permissions at any time and the SDK will display a system alert to the user. 
+
+    func requestPermissions(onComplete: @escaping (PermissionRequestResult) -> Void) throws
+
+    public enum PermissionRequestResult : Int{
+        case granted = 0
+        case denied = 1
+        case customized = 2
+        case failedNoUserDataAvailable = 3
+        case allPredictionsAlreadyGranted = 4
+    }
+
+A customized response means the user has decided to grant specific permissions, and you should verify all intended predictions
+prior to running a session. At the time the onComplete handler returns, the _userPredictionsData_ variable of the SDK has been updated with latest permission data.
+
 #### Connect to an Arctop Sensor Device 
 
-Connecting to a Arctop sensor device, for example a headband, is accomplished by calling **func connectSensorDevice(deviceId: String) throws** 
+Connecting to an Arctop sensor device, for example a headband, is accomplished by calling **func connectSensorDevice(deviceId: String) throws** 
 
-To find available devices, you can initiate a scan using **func scanForAvailableDevices() throws**.
-Results will be reported to the SDK Listener via: **func onDeviceListUpdated(museDeviceList: [String])**
-The counterpart call **func terminateScanForDevices() throws** can be used to stop an ongoing scan.
+To find available devices, you can initiate a scan using 
 
-The call to **func connectSensorDevice(deviceId: String)** will initiate a series of callbacks to **onConnectionChanged(ConnectionState previousConnection ,ConnectionState currentConnection)**
+    func scanForAvailableDevices() throws
+
+Results will be reported to the SDK Listener via
+    
+    func onDeviceListUpdated(museDeviceList: [String])
+
+The counterpart call 
+
+    func terminateScanForDevices() throws
+
+can be used to stop an ongoing scan.
+
+The call to 
+    
+    func connectSensorDevice(deviceId: String)
+
+will initiate a series of callbacks to 
+
+    onConnectionChanged(ConnectionState previousConnection ,ConnectionState currentConnection)
 
 The values for *previousConnection* and *currentConnection* are defined as:
 
@@ -177,7 +226,9 @@ The values for *previousConnection* and *currentConnection* are defined as:
 
 Once the value of *currentConnection == .connected* , you may begin a session. 
 
-To disconnect, you can always call **func disconnectSensorDevice() throws**
+To disconnect, you can always call 
+
+    func disconnectSensorDevice() throws
 
 #### Verify Signal Quality of Device
 
@@ -255,14 +306,18 @@ Valid types are defined as:
 #### Finish Session
 
 When you are ready to complete the session, call **func finishSession() async -> Result<Bool, Error>**. 
-The session will be uploaded to the server in a background thread and you will receive a response when it has completed.
+The session will be uploaded to the server in a background thread, and you will receive a response when it has completed.
 In case of an error, the SDK will attempt to recover the session at a later time in the background.
 
 ### Cleanup
 
 #### Shut Down the SDK
 
-Call **func deinitializeArctop()** to have Arctop release all of its resources.
+Call 
+
+    func deinitializeArctop()
+
+to have Arctop release all of its resources.
 
 ### Example App
 
